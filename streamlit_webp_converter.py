@@ -7,7 +7,7 @@ from typing import List, Tuple
 
 # Configuração da página
 st.set_page_config(
-    page_title="Conversor PNG → WEBP",
+    page_title="Conversor PNG → WEBP | PMCs SoftExpert",
     page_icon="🖼️",
     layout="wide",
     initial_sidebar_state="expanded"
