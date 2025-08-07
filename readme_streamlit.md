@@ -1,4 +1,4 @@
-# 🖼️ Conversor PNG → WEBP
+# 🖼️ Conversor PNG → WEBP | PMCs SoftExpert
 
 Uma aplicação web simples e intuitiva para converter imagens PNG para o formato WEBP, otimizando suas imagens para web.
 
