@@ -112,7 +112,7 @@ def format_bytes(bytes_value: int) -> str:
 
 def main():
     # Título principal
-    st.markdown('<h1 class="main-header">🖼️ Conversor PNG → WEBP</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">🖼️ Conversor PNG → WEBP | PMCs SoftExpert</h1>', unsafe_allow_html=True)
     
     # Sidebar com configurações
     st.sidebar.header("⚙️ Configurações")
