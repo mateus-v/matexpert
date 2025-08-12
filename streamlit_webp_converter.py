@@ -1,3 +1,9 @@
+#!/usr/bin/env python3
+"""
+Conversor Universal → WEBP
+Aplicação Streamlit para converter PNG, JPEG e GIF para WEBP
+"""
+
 import streamlit as st
 import io
 import zipfile
@@ -59,8 +65,8 @@ def convert_image_to_webp(image_data: bytes, filename: str, quality: int, lossle
         # Abrir imagem
         image = Image.open(io.BytesIO(image_data))
         
-        # Tratar GIF animado
-        if file_ext == 'gif' and hasattr(image, 'is_animated') and image.is_animated:
+        # Tratar GIF (sempre como animado, mesmo se for estático)
+        if file_ext == 'gif':
             return convert_animated_gif_to_webp(image_data, filename, quality, lossless)
         
         # Converter para modo RGB se necessário
@@ -123,7 +129,7 @@ def convert_image_to_webp(image_data: bytes, filename: str, quality: int, lossle
 
 def convert_animated_gif_to_webp(image_data: bytes, filename: str, quality: int, lossless: bool) -> Tuple[bytes, dict]:
     """
-    Converte GIF animado para WEBP animado
+    Converte GIF para WEBP animado (funciona para GIFs animados e estáticos)
     """
     try:
         gif_image = Image.open(io.BytesIO(image_data))
@@ -132,22 +138,59 @@ def convert_animated_gif_to_webp(image_data: bytes, filename: str, quality: int,
         frames = []
         durations = []
         
-        for frame in ImageSequence.Iterator(gif_image):
-            # Converter frame para RGB se necessário
+        # Verificar se é realmente animado
+        is_animated = getattr(gif_image, 'is_animated', False)
+        n_frames = getattr(gif_image, 'n_frames', 1)
+        
+        if is_animated and n_frames > 1:
+            # GIF realmente animado - extrair todos os frames
+            for frame in ImageSequence.Iterator(gif_image):
+                # Converter frame para RGBA para preservar transparência
+                if frame.mode != 'RGBA':
+                    frame = frame.convert('RGBA')
+                
+                frames.append(frame.copy())
+                
+                # Obter duração do frame (em milissegundos)
+                duration = frame.info.get('duration', 100)
+                durations.append(duration)
+        else:
+            # GIF estático - tratar como frame único mas salvar como WEBP animado
+            frame = gif_image.copy()
             if frame.mode != 'RGBA':
                 frame = frame.convert('RGBA')
             
-            frames.append(frame.copy())
-            
-            # Obter duração do frame (em milissegundos)
-            duration = frame.info.get('duration', 100)
-            durations.append(duration)
+            frames = [frame]
+            durations = [100]  # Duração padrão para frame único
         
         # Salvar como WEBP animado
         output_buffer = io.BytesIO()
         
-        if len(frames) > 1:
-            # GIF animado
+        if len(frames) == 1:
+            # GIF estático - salvar como WEBP animado com 1 frame
+            if lossless:
+                frames[0].save(
+                    output_buffer,
+                    'WEBP',
+                    save_all=True,
+                    duration=durations[0],
+                    loop=0,
+                    lossless=True
+                )
+                compression_type = "WEBP Animado - Sem perdas"
+            else:
+                frames[0].save(
+                    output_buffer,
+                    'WEBP',
+                    save_all=True,
+                    duration=durations[0],
+                    loop=0,
+                    quality=quality,
+                    optimize=True
+                )
+                compression_type = f"WEBP Animado - Qualidade {quality}"
+        else:
+            # GIF realmente animado
             if lossless:
                 frames[0].save(
                     output_buffer,
@@ -158,7 +201,7 @@ def convert_animated_gif_to_webp(image_data: bytes, filename: str, quality: int,
                     loop=0,
                     lossless=True
                 )
-                compression_type = "Animado - Sem perdas"
+                compression_type = "WEBP Animado - Sem perdas"
             else:
                 frames[0].save(
                     output_buffer,
@@ -170,15 +213,7 @@ def convert_animated_gif_to_webp(image_data: bytes, filename: str, quality: int,
                     quality=quality,
                     optimize=True
                 )
-                compression_type = f"Animado - Qualidade {quality}"
-        else:
-            # GIF estático
-            if lossless:
-                frames[0].save(output_buffer, 'WEBP', lossless=True)
-                compression_type = "Sem perdas"
-            else:
-                frames[0].save(output_buffer, 'WEBP', quality=quality, optimize=True)
-                compression_type = f"Qualidade {quality}"
+                compression_type = f"WEBP Animado - Qualidade {quality}"
         
         webp_data = output_buffer.getvalue()
         
@@ -197,13 +232,14 @@ def convert_animated_gif_to_webp(image_data: bytes, filename: str, quality: int,
             'dimensions': f"{gif_image.size[0]}x{gif_image.size[1]}",
             'has_transparency': True,
             'frames': len(frames),
-            'animated': len(frames) > 1
+            'animated': len(frames) > 1,
+            'output_type': 'WEBP Animado'
         }
         
         return webp_data, stats
         
     except Exception as e:
-        st.error(f"Erro ao converter GIF animado {filename}: {str(e)}")
+        st.error(f"Erro ao converter GIF {filename}: {str(e)}")
         return None, None
 
 def create_download_link(data: bytes, filename: str, text: str) -> str:
@@ -222,7 +258,7 @@ def format_bytes(bytes_value: int) -> str:
 
 def main():
     # Título principal
-    st.markdown('<h1 class="main-header">🖼️ Conversor Universal → WEBP | PMCs Softexpert</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">🖼️ Conversor Universal → WEBP</h1>', unsafe_allow_html=True)
     
     # Sidebar com configurações
     st.sidebar.header("⚙️ Configurações")
@@ -258,15 +294,31 @@ def main():
         **Por que converter para WEBP:**
         - 📉 Até 35% menor que PNG
         - 📉 Até 25% menor que JPEG
+        - 📉 Até 50% menor que GIF
         - ✨ Suporte a transparência
-        - 🎬 Suporte a animações
+        - 🎬 Suporte a animações (melhor que GIF)
         - 🌐 Suportado por navegadores modernos
         - ⚡ Carregamento mais rápido
         
         **Qualidade recomendada:**
         - 📷 **Fotos**: 80-85
         - 🎨 **Gráficos**: 90-95  
+        - 🎬 **GIFs**: 75-85 (animações)
         - 💾 **Economia**: 70-80
+        
+        **⭐ GIFs sempre viram WEBP Animado!**
+        """)
+    
+    # Informação sobre GIFs
+    with st.sidebar.expander("🎬 Sobre GIFs → WEBP"):
+        st.write("""
+        **Conversão de GIFs:**
+        - ✅ **Sempre WEBP Animado** (mesmo GIFs estáticos)
+        - ✅ **Transparência preservada**
+        - ✅ **Animações mantidas** com melhor compressão
+        - ✅ **Até 50% menores** que GIF original
+        - ✅ **Melhor qualidade** que GIF
+        - ✅ **Suporte nativo** em navegadores modernos
         """)
     
     # Upload de arquivos
@@ -380,6 +432,8 @@ def main():
                     if 'frames' in stats:
                         row["Frames"] = stats['frames']
                         row["Animado"] = "Sim" if stats.get('animated', False) else "Não"
+                        if 'output_type' in stats:
+                            row["Tipo Saída"] = stats['output_type']
                     
                     # Adicionar informação sobre transparência
                     if stats.get('has_transparency'):
@@ -434,12 +488,13 @@ def main():
         💡 **Formatos suportados:**
         - 🖼️ **PNG** - Preserva transparência
         - 📷 **JPEG/JPG** - Fotos e imagens
-        - 🎬 **GIF** - Incluindo animações!
+        - 🎬 **GIF** - **SEMPRE vira WEBP Animado!**
         
         ⚡ **Benefícios:**
-        - Arquivos até **35% menores**
+        - Arquivos até **50% menores** (GIFs)
         - **Transparência preservada** (PNG/GIF)
-        - **Animações mantidas** (GIF)
+        - **Animações mantidas** e melhoradas (GIF)
+        - **Qualidade superior** ao GIF original
         - **Qualidade ajustável**
         """)
     
